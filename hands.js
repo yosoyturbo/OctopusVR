@@ -1,0 +1,11 @@
+// MediaPipe Tasks Vision Hand Landmarker (real camera landmark tracking)
+export async function startHands(video,canvas,styleSelect,onStatus=()=>{}){
+ if(!navigator.mediaDevices?.getUserMedia)throw new Error('Câmera não disponível neste navegador.');
+ const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});video.srcObject=stream;await video.play();
+ const {FilesetResolver,HandLandmarker}=await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22');
+ const vision=await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm');
+ const landmarker=await HandLandmarker.createFromOptions(vision,{baseOptions:{modelAssetPath:'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',delegate:'GPU'},runningMode:'VIDEO',numHands:2});
+ const ctx=canvas.getContext('2d');let alive=true,last=0;
+ function draw(){if(!alive)return;requestAnimationFrame(draw);if(video.readyState<2||video.currentTime===last)return;last=video.currentTime;canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.clearRect(0,0,canvas.width,canvas.height);ctx.save();ctx.scale(-1,1);ctx.drawImage(video,-canvas.width,0,canvas.width,canvas.height);ctx.restore();let result=landmarker.detectForVideo(video,performance.now());let hands=result.landmarks||[];hands.forEach(points=>{let mode=styleSelect.value;ctx.lineWidth=mode==='aura'?14:4;ctx.strokeStyle=mode==='glove'?'#b65cff':'#00eaff';ctx.shadowBlur=mode==='aura'?25:12;ctx.shadowColor=ctx.strokeStyle;const links=[[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];links.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo((1-points[a].x)*canvas.width,points[a].y*canvas.height);ctx.lineTo((1-points[b].x)*canvas.width,points[b].y*canvas.height);ctx.stroke()});points.forEach(p=>{ctx.beginPath();ctx.arc((1-p.x)*canvas.width,p.y*canvas.height,mode==='dots'?7:4,0,Math.PI*2);ctx.fillStyle=mode==='glove'?'#b65cff':'#00eaff';ctx.fill()})});onStatus(hands.length+' mão(s) detectada(s) • 21 landmarks por mão')}
+ draw();return {stop(){alive=false;landmarker.close();stream.getTracks().forEach(t=>t.stop());video.srcObject=null;ctx.clearRect(0,0,canvas.width,canvas.height)}};
+}
